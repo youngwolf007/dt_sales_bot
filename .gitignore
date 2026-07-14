@@ -8,3 +8,5 @@ __pycache__/
 out.txt
 service_account*.json
 credentials/
+skeleton.pdf
+skeleton.pptx

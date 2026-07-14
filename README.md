@@ -1,3 +1,14 @@
+---
+title: DT Sales Bot
+emoji: 📡
+colorFrom: pink
+colorTo: blue
+sdk: gradio
+sdk_version: 6.20.0
+app_file: app.py
+pinned: false
+---
+
 # DT Sales Support Chatbot
 
 A multi-agent sales support chatbot for Deutsche Telekom (DT) business customers,

@@ -15,6 +15,12 @@ EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_SMTP_SERVER = os.getenv("EMAIL_SMTP_SERVER")
 EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")
 
+# Optional: Google Sheets CRM. If unset, the CRM tools return a clear error
+# instead of the app failing to start.
+GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID")
+GOOGLE_SHEETS_WORKSHEET_NAME = os.getenv("GOOGLE_SHEETS_WORKSHEET_NAME", "Leads")
+
 _REQUIRED = {
     "OPENAI_API_KEY": OPENAI_API_KEY,
     "EMAIL_ADDRESS": EMAIL_ADDRESS,

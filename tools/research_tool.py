@@ -50,4 +50,8 @@ async def research_dt_solutions(ctx: RunContextWrapper[SalesContext], need: str)
         return f"Research failed: {exc}. Try again or narrow the request."
 
     findings = _strip_untrusted_links(result.final_output)
+    # Recorded here purely as data for the sales agent's own on_tool_end hook
+    # (see agents_def/sales_agent.py) to act on — this tool's job is research,
+    # not deciding what goes into the CRM.
+    ctx.context.last_research_findings = findings
     return _format_findings(findings)

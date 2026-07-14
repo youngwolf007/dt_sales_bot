@@ -119,7 +119,7 @@ async def _drop_dangling_user_turn(session: SQLiteSession) -> None:
         await session.pop_item()
 
 
-async def _stream_turn(agent, message: str, session, context, trace_id: str, verified_email: str):
+async def _stream_turn(agent, message: str, session, context, trace_id: str, verified_email: str, session_id: str):
     """Runs one turn against `agent`, yielding streaming chunks (str, or a
     final gr.ChatMessage if the agent offered quick-reply options). Shared by
     both the primary agent and the Gemini fallback so they don't duplicate
@@ -128,7 +128,7 @@ async def _stream_turn(agent, message: str, session, context, trace_id: str, ver
     status = ""
     quick_reply_options: list[str] | None = None
 
-    with trace(f"DT Sales Bot — {verified_email}", trace_id=trace_id):
+    with trace(f"DT Sales Bot — {verified_email}", trace_id=trace_id, group_id=session_id):
         result = Runner.run_streamed(agent, input=message, session=session, context=context)
         async for event in result.stream_events():
             if event.type == "raw_response_event" and isinstance(event.data, ResponseTextDeltaEvent):
@@ -156,16 +156,27 @@ async def _stream_turn(agent, message: str, session, context, trace_id: str, ver
         yield response
 
 
-async def chat(message: str, history: list[dict], verified_email: str, session_id: str):
+async def chat(
+    message: str,
+    history: list[dict],
+    verified_email: str,
+    verified_name: str,
+    verified_company: str,
+    session_id: str,
+):
     session = _get_session(session_id)
-    context = SalesContext(customer_email=verified_email)
+    context = SalesContext(
+        customer_email=verified_email,
+        customer_name=verified_name,
+        customer_company=verified_company,
+    )
 
     trace_id = gen_trace_id()
     print(f"Trace: https://platform.openai.com/traces/trace?trace_id={trace_id}")
 
     last_chunk: str | gr.ChatMessage | None = None
     try:
-        async for chunk in _stream_turn(sales_agent, message, session, context, trace_id, verified_email):
+        async for chunk in _stream_turn(sales_agent, message, session, context, trace_id, verified_email, session_id):
             last_chunk = chunk
             yield chunk
         return
@@ -184,7 +195,7 @@ async def chat(message: str, history: list[dict], verified_email: str, session_i
             print("No output streamed yet — retrying this turn via Gemini fallback.")
             try:
                 async for chunk in _stream_turn(
-                    gemini_sales_agent, message, session, context, trace_id, verified_email
+                    gemini_sales_agent, message, session, context, trace_id, verified_email, session_id
                 ):
                     yield chunk
                 return
@@ -200,48 +211,86 @@ async def chat(message: str, history: list[dict], verified_email: str, session_i
         return
 
 
-def handle_send_otp(email: str):
+def handle_send_otp(email: str, name: str, company: str):
     email = (email or "").strip()
+    name = (name or "").strip()
+    company = (company or "").strip()
+
     if not EMAIL_RE.match(email):
         return (
             None,
+            None,
+            None,
             "❌ Please enter a valid email address.",
+            gr.update(visible=False),
+            gr.update(visible=False),
+        )
+    if not name or not company:
+        return (
+            None,
+            None,
+            None,
+            "❌ Please enter your name and company name.",
             gr.update(visible=False),
             gr.update(visible=False),
         )
 
     error = generate_and_send_otp(email)
     if error:
-        return None, f"❌ {error}", gr.update(visible=False), gr.update(visible=False)
+        return None, None, None, f"❌ {error}", gr.update(visible=False), gr.update(visible=False)
 
     return (
         email,
+        name,
+        company,
         f"✅ Code sent to {email}. Check your inbox (and spam folder).",
         gr.update(visible=True),
         gr.update(visible=True),
     )
 
 
-def handle_verify_otp(pending_email: str, code: str):
+def handle_verify_otp(pending_email: str, pending_name: str, pending_company: str, code: str):
     if not pending_email:
-        return None, None, "❌ Please request a code first.", gr.update(visible=True), gr.update(visible=False)
+        return (
+            None,
+            None,
+            None,
+            None,
+            "❌ Please request a code first.",
+            gr.update(visible=True),
+            gr.update(visible=False),
+        )
 
     ok, error = verify_otp(pending_email, (code or "").strip())
     if not ok:
-        return None, None, f"❌ {error}", gr.update(visible=True), gr.update(visible=False)
+        return None, None, None, None, f"❌ {error}", gr.update(visible=True), gr.update(visible=False)
 
-    return pending_email, _new_session_id(pending_email), "", gr.update(visible=False), gr.update(visible=True)
+    return (
+        pending_email,
+        pending_name,
+        pending_company,
+        _new_session_id(pending_email),
+        "",
+        gr.update(visible=False),
+        gr.update(visible=True),
+    )
 
 
 with gr.Blocks(title=TITLE) as demo:
     verified_email = gr.State(None)
+    verified_name = gr.State(None)
+    verified_company = gr.State(None)
     session_id = gr.State(None)
     pending_email = gr.State(None)
+    pending_name = gr.State(None)
+    pending_company = gr.State(None)
 
     gr.Markdown(f"# {TITLE}")
 
     with gr.Group(visible=True) as login_group:
-        gr.Markdown("### Sign in to continue\nEnter your email — we'll send you a one-time code.")
+        gr.Markdown("### Sign in to continue\nTell us a bit about yourself — we'll send you a one-time code.")
+        name_box = gr.Textbox(label="Full name", placeholder="Jane Doe")
+        company_box = gr.Textbox(label="Company name", placeholder="Acme Corp")
         email_box = gr.Textbox(label="Email address", placeholder="you@company.com")
         send_otp_btn = gr.Button("Send code")
         login_status = gr.Markdown("")
@@ -250,19 +299,31 @@ with gr.Blocks(title=TITLE) as demo:
 
     with gr.Group(visible=False) as chat_group:
         gr.Markdown(DESCRIPTION)
-        gr.ChatInterface(chat, additional_inputs=[verified_email, session_id], chatbot=_build_greeting_chatbot())
+        gr.ChatInterface(
+            chat,
+            additional_inputs=[verified_email, verified_name, verified_company, session_id],
+            chatbot=_build_greeting_chatbot(),
+        )
 
     send_otp_btn.click(
         handle_send_otp,
-        inputs=[email_box],
-        outputs=[pending_email, login_status, otp_box, verify_btn],
+        inputs=[email_box, name_box, company_box],
+        outputs=[pending_email, pending_name, pending_company, login_status, otp_box, verify_btn],
     )
     verify_btn.click(
         handle_verify_otp,
-        inputs=[pending_email, otp_box],
-        outputs=[verified_email, session_id, login_status, login_group, chat_group],
+        inputs=[pending_email, pending_name, pending_company, otp_box],
+        outputs=[
+            verified_email,
+            verified_name,
+            verified_company,
+            session_id,
+            login_status,
+            login_group,
+            chat_group,
+        ],
     )
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(server_name="127.0.0.1", server_port=7860)

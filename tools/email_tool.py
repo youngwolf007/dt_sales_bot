@@ -135,6 +135,11 @@ def send_proposal_email(
         recipient_email: The customer's email address. Usually you can omit
             this — it defaults to the customer's verified login email.
     """
+    # Cleared up front so a failed call never leaves a stale success from an
+    # earlier proposal for the sales agent's on_tool_end hook to pick up.
+    ctx.context.last_sent_proposal = None
+    ctx.context.last_sent_proposal_recipient = None
+
     recipient_email = recipient_email or ctx.context.customer_email
 
     if not EMAIL_RE.match(recipient_email):
@@ -157,6 +162,12 @@ def send_proposal_email(
         send_email(recipient_email, subject, text_body, html_body, attachment=attachment)
     except Exception as exc:  # noqa: BLE001 - surface any SMTP failure back to the agent
         return f"Failed to send email to {recipient_email}: {exc}"
+
+    # Recorded here purely as data for the sales agent's own on_tool_end hook
+    # (see agents_def/sales_agent.py) to act on — this tool's job is sending
+    # the email, not deciding what goes into the CRM.
+    ctx.context.last_sent_proposal = proposal
+    ctx.context.last_sent_proposal_recipient = recipient_email
 
     if pdf_error:
         return (

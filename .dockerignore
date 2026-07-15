@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.env
+*.db
+*.db-shm
+*.db-wal
+credentials/
+service_account*.json
+out.txt
+skeleton.pdf
+skeleton.pptx

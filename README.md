@@ -15,6 +15,9 @@ pinned: false
 A multi-agent sales support chatbot for Deutsche Telekom (DT) business customers,
 built with the OpenAI Agents SDK.
 
+- **Live app**: https://dt-sales-bot-1021510770728.europe-west1.run.app/
+- **CRM (Google Sheet)**: https://docs.google.com/spreadsheets/d/1DA1KFU-VAA7tAFmepewFpLJ88EkqcV0l5WMXEaaiRzk
+
 - **Sales Agent** — talks to the customer, gathers their business requirements,
   presents recommended DT solutions, and (with explicit consent) emails a
   proposal.
@@ -182,3 +185,40 @@ enforced independently in `trusted_domains.py` (shared `sanitize_solutions()`
 helper, used by research findings, the proposal email, and the brochure PDF)
 + `untrusted_link_guardrail` (chat replies) — a page being *readable* never
 makes it *citable*.
+
+## Deploying to Cloud Run
+
+The app already binds `0.0.0.0:$PORT` (`app.py`'s `demo.launch(...)`), so the
+existing `Dockerfile` runs on Cloud Run as-is — no code changes needed.
+
+```powershell
+gcloud auth login
+./deploy.ps1 -ProjectId your-gcp-project -AllowUnauthenticated
+```
+
+What `deploy.ps1` does:
+
+1. Enables the Cloud Run / Cloud Build / Artifact Registry / Secret Manager
+   APIs on the target project.
+2. Reads `.env` and syncs the sensitive values (`OPENAI_API_KEY`,
+   `EMAIL_APP_PASSWORD`, `GEMINI_API_KEY` if set) into Secret Manager,
+   creating a new secret version each time you re-run it.
+3. If `credentials/service_account.json` exists locally, syncs it into
+   Secret Manager too (as `GOOGLE_SERVICE_ACCOUNT_JSON`) so the Google
+   Sheets CRM works without shipping the key file in the image — same
+   mechanism `config.py` already uses for HF Spaces.
+4. Runs `gcloud run deploy --source .`, which builds the existing
+   `Dockerfile` via Cloud Build and deploys it, wiring the synced secrets and
+   remaining plain env vars (`DEFAULT_MODEL_NAME`, `EMAIL_ADDRESS`, etc.) in.
+
+Pass `-Region`, `-ServiceName`, or `-ProjectId` to override the defaults; see
+the script header for the full parameter list. Omit `-AllowUnauthenticated`
+to require IAM auth on the deployed URL instead of public access.
+
+**Known limitation — keep this at a single instance.** OTP codes (`auth.py`)
+and chat sessions (`app.py`'s `_sessions` dict + the local
+`dt_sales_bot_sessions.db` SQLite file) are both process-local, not backed by
+a shared store. `deploy.ps1` sets `--max-instances 1` for this reason — fine
+for a demo, but it means the service can't scale out, and a redeploy or
+restart drops in-flight sessions/OTP codes. Moving to Firestore or Cloud SQL
+for both would be the fix if this needs to run for real.

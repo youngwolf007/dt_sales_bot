@@ -1,4 +1,5 @@
 import json
+import os
 import uuid
 
 import gradio as gr
@@ -17,6 +18,7 @@ from agents_def.sales_agent import gemini_sales_agent, sales_agent
 from auth import generate_and_send_otp, verify_otp
 from context import SalesContext
 from tools.email_tool import EMAIL_RE
+from tools.push_tool import send_push_notification
 
 INPUT_GUARDRAIL_MESSAGES = {
     "pii_input_guardrail": (
@@ -265,6 +267,14 @@ def handle_verify_otp(pending_email: str, pending_name: str, pending_company: st
     if not ok:
         return None, None, None, None, f"❌ {error}", gr.update(visible=True), gr.update(visible=False)
 
+    try:
+        send_push_notification(
+            "New DT Sales Bot login",
+            f"{pending_name} ({pending_company}) just signed in as {pending_email}.",
+        )
+    except Exception as exc:  # noqa: BLE001 - never block login on a notification failure
+        print(f"Push notification failed: {exc}")
+
     return (
         pending_email,
         pending_name,
@@ -326,4 +336,4 @@ with gr.Blocks(title=TITLE) as demo:
 
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=int(os.environ.get("PORT", 7860)))

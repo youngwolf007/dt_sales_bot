@@ -215,6 +215,15 @@ Pass `-Region`, `-ServiceName`, or `-ProjectId` to override the defaults; see
 the script header for the full parameter list. Omit `-AllowUnauthenticated`
 to require IAM auth on the deployed URL instead of public access.
 
+### Continuous deployment
+
+The `dt-sales-bot` Cloud Run service (`europe-west1`) is connected to this
+GitHub repo via Developer Connect: every push to `master` triggers a Cloud
+Build using the existing `Dockerfile` and deploys a new revision
+automatically. Env vars/secrets aren't re-specified by that trigger, so the
+service just inherits whatever was last synced by `deploy.ps1` — re-run
+`deploy.ps1` only when a secret value changes, not for ordinary code pushes.
+
 **Known limitation — keep this at a single instance.** OTP codes (`auth.py`)
 and chat sessions (`app.py`'s `_sessions` dict + the local
 `dt_sales_bot_sessions.db` SQLite file) are both process-local, not backed by

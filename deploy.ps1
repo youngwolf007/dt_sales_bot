@@ -96,6 +96,13 @@ if (Sync-SecretFromValue -Name "dt-sales-bot-gemini-api-key" -Value $envVars["GE
     $secretEnvFlags += "GEMINI_API_KEY=dt-sales-bot-gemini-api-key:latest"
 }
 
+if (Sync-SecretFromValue -Name "dt-sales-bot-pushover-api-token" -Value $envVars["PUSHOVER_API_TOKEN"]) {
+    $secretEnvFlags += "PUSHOVER_API_TOKEN=dt-sales-bot-pushover-api-token:latest"
+}
+if (Sync-SecretFromValue -Name "dt-sales-bot-pushover-user-key" -Value $envVars["PUSHOVER_USER_KEY"]) {
+    $secretEnvFlags += "PUSHOVER_USER_KEY=dt-sales-bot-pushover-user-key:latest"
+}
+
 $hasCrm = $false
 if (Test-Path $ServiceAccountFile) {
     Sync-SecretFromFile -Name "dt-sales-bot-google-service-account" -FilePath $ServiceAccountFile

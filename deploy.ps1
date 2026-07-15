@@ -48,7 +48,10 @@ function Sync-SecretFromValue {
     param([string]$Name, [string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
     $tmp = New-TemporaryFile
-    Set-Content -Path $tmp -Value $Value -NoNewline -Encoding utf8
+    # Windows PowerShell 5.1's -Encoding utf8 always prepends a UTF-8 BOM,
+    # which then gets uploaded byte-for-byte as the secret's content and
+    # breaks smtplib's .encode("ascii") on login. Write BOM-less UTF-8 instead.
+    [System.IO.File]::WriteAllText($tmp, $Value, (New-Object System.Text.UTF8Encoding $false))
     Sync-SecretFromFile -Name $Name -FilePath $tmp
     Remove-Item $tmp
     return $true

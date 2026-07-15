@@ -5,16 +5,26 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-DEFAULT_MODEL_NAME = os.getenv("DEFAULT_MODEL_NAME", "gpt-4.1")
+
+def _clean_env(name: str, default: str | None = None) -> str | None:
+    """os.getenv, stripped of surrounding whitespace and stray BOM characters
+    (﻿) that some editors/hosting secret UIs sneak into pasted values —
+    those aren't whitespace, so plain .strip() won't catch them, and they
+    blow up smtplib's user.encode("ascii") in login() with a cryptic error."""
+    value = os.getenv(name, default)
+    return value.replace("﻿", "").strip() if value else value
+
+
+OPENAI_API_KEY = _clean_env("OPENAI_API_KEY")
+DEFAULT_MODEL_NAME = _clean_env("DEFAULT_MODEL_NAME", "gpt-4.1")
 
 # Optional: enables automatic fallback to Gemini when OpenAI rate-limits.
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL_NAME = os.getenv("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
+GEMINI_API_KEY = _clean_env("GEMINI_API_KEY")
+GEMINI_MODEL_NAME = _clean_env("GEMINI_MODEL_NAME", "gemini-3.1-flash-lite")
 
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-EMAIL_SMTP_SERVER = os.getenv("EMAIL_SMTP_SERVER")
-EMAIL_APP_PASSWORD = os.getenv("EMAIL_APP_PASSWORD")
+EMAIL_ADDRESS = _clean_env("EMAIL_ADDRESS")
+EMAIL_SMTP_SERVER = _clean_env("EMAIL_SMTP_SERVER")
+EMAIL_APP_PASSWORD = _clean_env("EMAIL_APP_PASSWORD")
 
 # Optional: Pushover push notification on each login. If unset, notifications
 # are silently skipped instead of the app failing to start.
